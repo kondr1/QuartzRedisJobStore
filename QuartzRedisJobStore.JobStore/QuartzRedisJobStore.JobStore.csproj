@@ -5,6 +5,7 @@
     <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  
   <PropertyGroup>
     <PackageId>QuartzRedisJobStore.JobStore</PackageId>
     <Product>QuartzRedisJobStore.JobStore</Product>
@@ -15,6 +16,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="Quartz" Version="3.4.0" />
+    <PackageReference Include="Quartz.Serialization.Json" Version="3.3.3" />
     <PackageReference Include="StackExchange.Redis" Version="2.6.48" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
   </ItemGroup>

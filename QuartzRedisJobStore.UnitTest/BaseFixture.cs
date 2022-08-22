@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
@@ -64,8 +64,14 @@ namespace QuartzRedisJobStore.UnitTest
         static async Task InitializeJobStore()
         {
             var redisConfiguration = ConfigurationOptions.Parse(ConfigurationManager.AppSettings["RedisConfiguration"]);
+            var endpoint = redisConfiguration.EndPoints.FirstOrDefault();
+            string uriString = null!;
+            if (endpoint is DnsEndPoint point)
+                uriString = $"redis://{point.Host}:{point.Port}";
+            if (endpoint is IPEndPoint ipPoint)
+                uriString = $"redis://{ipPoint.Address}:{ipPoint.Port}";
 
-            var uri = new Uri($"redis://{redisConfiguration.EndPoints.FirstOrDefault()}", UriKind.Absolute);
+            var uri = new Uri(uriString, UriKind.Absolute);
 
             JobStore = new RedisJobStore
             {
