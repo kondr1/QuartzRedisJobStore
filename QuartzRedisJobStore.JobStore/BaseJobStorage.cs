@@ -1,7 +1,4 @@
-﻿using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using Quartz;
@@ -9,11 +6,13 @@ using Quartz.Impl.Matchers;
 using Quartz.Impl.Triggers;
 using Quartz.Spi;
 using StackExchange.Redis;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
-using System.Timers;
+using System;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Threading;
+using System.Linq;
 
 namespace QuartzRedisJobStore.JobStore
 {
@@ -22,15 +21,11 @@ namespace QuartzRedisJobStore.JobStore
     /// </summary>
     public abstract class BaseJobStorage
     {
-        /// <summary>
-        /// Logger 
-        /// </summary>
-        readonly ILogger logger;
 
         /// <summary>
         /// Utc datetime of Epoch.
         /// </summary>
-        static readonly DateTime unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        private static readonly DateTime unixEpoch = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         /// <summary>
         /// RedisJobStoreSchema
@@ -70,7 +65,7 @@ namespace QuartzRedisJobStore.JobStore
         /// <summary>
         /// JsonSerializerSettings
         /// </summary>
-        readonly JsonSerializerSettings serializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All, DateTimeZoneHandling = DateTimeZoneHandling.Utc, NullValueHandling = NullValueHandling.Ignore, ContractResolver = new CamelCasePropertyNamesContractResolver() };
+        private readonly JsonSerializerSettings serializerSettings = new() { TypeNameHandling = TypeNameHandling.All, DateTimeZoneHandling = DateTimeZoneHandling.Utc, NullValueHandling = NullValueHandling.Ignore, ContractResolver = new CamelCasePropertyNamesContractResolver() };
 
         /// <summary>
         /// constructor
@@ -87,27 +82,27 @@ namespace QuartzRedisJobStore.JobStore
             this.db = db;
             this.signaler = signaler;
             this.schedulerInstanceId = schedulerInstanceId;
-            this.logger = logger;
+            Logger = logger;
             this.triggerLockTimeout = triggerLockTimeout;
             this.redisLockTimeout = redisLockTimeout;
         }
 
 
         /// <summary>
-        /// Store the given <see cref="T:Quartz.IJobDetail"/>.
+        /// Store the given <see cref="IJobDetail"/>.
         /// </summary>
-        /// <param name="jobDetail">The <see cref="T:Quartz.IJobDetail"/> to be stored.</param><param name="replaceExisting">If <see langword="true"/>, any <see cref="T:Quartz.IJob"/> existing in the
-        ///             <see cref="T:Quartz.Spi.IJobStore"/> with the same name and group should be
+        /// <param name="jobDetail">The <see cref="IJobDetail"/> to be stored.</param><param name="replaceExisting">If <see langword="true"/>, any <see cref="IJob"/> existing in the
+        ///             <see cref="IJobStore"/> with the same name and group should be
         ///             over-written.
         ///             </param>
         public abstract Task StoreJobAsync(IJobDetail jobDetail, bool replaceExisting);
 
         /// <summary>
-        /// Retrieve the <see cref="T:Quartz.IJobDetail"/> for the given
-        ///             <see cref="T:Quartz.IJob"/>.
+        /// Retrieve the <see cref="IJobDetail"/> for the given
+        ///             <see cref="IJob"/>.
         /// </summary>
         /// <returns>
-        /// The desired <see cref="T:Quartz.IJob"/>, or null if there is no match.
+        /// The desired <see cref="IJob"/>, or null if there is no match.
         /// </returns>
         public async Task<IJobDetail> RetrieveJobAsync(JobKey jobKey)
         {
@@ -125,7 +120,7 @@ namespace QuartzRedisJobStore.JobStore
 
             if (jobType == null)
             {
-                logger.LogWarning("Could not find job class {0} for job {1}", jobProperties[RedisJobStoreSchema.JobClass], jobKey);
+                Logger.LogWarning("Could not find job class {0} for job {1}", jobProperties[RedisJobStoreSchema.JobClass], jobKey);
                 return null;
             }
 
@@ -138,18 +133,19 @@ namespace QuartzRedisJobStore.JobStore
 
             if (jobDataMap != null && jobDataMap.Any())
             {
-                var dataMap = new JobDataMap(ConvertToDictionaryString(jobDataMap) as IDictionary);
+                var dataMap = new JobDataMap((IDictionary) ConvertToDictionaryString(jobDataMap));
                 jobBuilder.SetJobData(dataMap);
             }
             return jobBuilder.Build();
         }
 
         /// <summary>
-        /// Store the given <see cref="T:Quartz.ITrigger"/>.
+        /// Store the given <see cref="ITrigger"/>.
         /// </summary>
-        /// <param name="trigger">The <see cref="T:Quartz.ITrigger"/> to be stored.</param><param name="replaceExisting">If <see langword="true"/>, any <see cref="T:Quartz.ITrigger"/> existing in
-        ///             the <see cref="T:Quartz.Spi.IJobStore"/> with the same name and group should
-        ///             be over-written.</param><throws>ObjectAlreadyExistsException </throws>
+        /// <param name="trigger">The <see cref="ITrigger"/> to be stored.</param><param name="replaceExisting">If <see langword="true"/>, any <see cref="ITrigger"/> existing in
+        ///             the <see cref="IJobStore"/> with the same name and group should
+        ///             be over-written.</param>
+        /// <exception cref="ObjectAlreadyExistsException"></exception>
         public abstract Task StoreTriggerAsync(ITrigger trigger, bool replaceExisting);
 
         /// <summary>
@@ -161,66 +157,70 @@ namespace QuartzRedisJobStore.JobStore
 
 
         /// <summary>
-        /// Store the given <see cref="T:Quartz.ICalendar"/>.
+        /// Store the given <see cref="ICalendar"/>.
         /// </summary>
-        /// <param name="name">The name.</param><param name="calendar">The <see cref="T:Quartz.ICalendar"/> to be stored.</param><param name="replaceExisting">If <see langword="true"/>, any <see cref="T:Quartz.ICalendar"/> existing
-        ///             in the <see cref="T:Quartz.Spi.IJobStore"/> with the same name and group
-        ///             should be over-written.</param><param name="updateTriggers">If <see langword="true"/>, any <see cref="T:Quartz.ITrigger"/>s existing
-        ///             in the <see cref="T:Quartz.Spi.IJobStore"/> that reference an existing
+        /// <param name="name">The name.</param><param name="calendar">The <see cref="ICalendar"/> to be stored.</param><param name="replaceExisting">If <see langword="true"/>, any <see cref="ICalendar"/> existing
+        ///             in the <see cref="IJobStore"/> with the same name and group
+        ///             should be over-written.</param><param name="updateTriggers">If <see langword="true"/>, any <see cref="ITrigger"/>s existing
+        ///             in the <see cref="IJobStore"/> that reference an existing
         ///             Calendar with the same name with have their next fire time
-        ///             re-computed with the new <see cref="T:Quartz.ICalendar"/>.</param><throws>ObjectAlreadyExistsException </throws>
+        ///             re-computed with the new <see cref="ICalendar"/>.</param>
+        /// <exception cref="NotImplementedException"></exception>
+        /// <exception cref="ObjectAlreadyExistsException"></exception>
+        /// <exception cref="JobPersistenceException"></exception>
         public abstract Task StoreCalendarAsync(string name, ICalendar calendar, bool replaceExisting, bool updateTriggers);
 
         /// <summary>
-        /// Remove (delete) the <see cref="T:Quartz.ICalendar"/> with the
+        /// Remove (delete) the <see cref="ICalendar"/> with the
         ///             given name.
         /// </summary>
         /// <remarks>
-        /// If removal of the <see cref="T:Quartz.ICalendar"/> would result in
-        ///             <see cref="T:Quartz.ITrigger"/>s pointing to non-existent calendars, then a
-        ///             <see cref="T:Quartz.JobPersistenceException"/> will be thrown.
+        /// If removal of the <see cref="ICalendar"/> would result in
+        ///             <see cref="ITrigger"/>s pointing to non-existent calendars, then a
+        ///             <see cref="JobPersistenceException"/> will be thrown.
         /// </remarks>
-        /// <param name="calendarName">The name of the <see cref="T:Quartz.ICalendar"/> to be removed.</param>
+        /// <param name="calendarName">The name of the <see cref="ICalendar"/> to be removed.</param>
         /// <returns>
-        /// <see langword="true"/> if a <see cref="T:Quartz.ICalendar"/> with the given name
+        /// <see langword="true"/> if a <see cref="ICalendar"/> with the given name
         ///             was found and removed from the store.
         /// </returns>
+        /// <exception cref="JobPersistenceException"></exception>
         public abstract Task<bool> RemoveCalendarAsync(string calendarName);
 
         /// <summary>
-        /// Remove (delete) the <see cref="T:Quartz.IJob"/> with the given
-        ///             key, and any <see cref="T:Quartz.ITrigger"/> s that reference
+        /// Remove (delete) the <see cref="IJob"/> with the given
+        ///             key, and any <see cref="ITrigger"/> s that reference
         ///             it.
         /// </summary>
         /// <remarks>
-        /// If removal of the <see cref="T:Quartz.IJob"/> results in an empty group, the
-        ///             group should be removed from the <see cref="T:Quartz.Spi.IJobStore"/>'s list of
+        /// If removal of the <see cref="IJob"/> results in an empty group, the
+        ///             group should be removed from the <see cref="IJobStore"/>'s list of
         ///             known group names.
         /// </remarks>
         /// <returns>
-        /// <see langword="true"/> if a <see cref="T:Quartz.IJob"/> with the given name and
+        /// <see langword="true"/> if a <see cref="IJob"/> with the given name and
         ///             group was found and removed from the store.
         /// </returns>
         public abstract Task<bool> RemoveJobAsync(JobKey jobKey);
 
         /// <summary>
-        /// Pause all of the <see cref="T:Quartz.IJob"/>s in the given
-        ///             group - by pausing all of their <see cref="T:Quartz.ITrigger"/>s.
+        /// Pause all of the <see cref="IJob"/>s in the given
+        ///             group - by pausing all of their <see cref="ITrigger"/>s.
         /// <para>
         /// The JobStore should "remember" that the group is paused, and impose the
         ///             pause on any new jobs that are added to the group while the group is
         ///             paused.
         /// </para>
         /// </summary>
-        /// <seealso cref="T:System.String"/>
+        /// <seealso cref="string"/>
         public abstract Task<IReadOnlyCollection<string>> PauseJobsAsync(GroupMatcher<JobKey> matcher);
 
         /// <summary>
-        /// Resume (un-pause) the <see cref="T:Quartz.IJob"/> with the
+        /// Resume (un-pause) the <see cref="IJob"/> with the
         ///             given key.
         /// <para>
-        /// If any of the <see cref="T:Quartz.IJob"/>'s<see cref="T:Quartz.ITrigger"/> s missed one
-        ///             or more fire-times, then the <see cref="T:Quartz.ITrigger"/>'s misfire
+        /// If any of the <see cref="IJob"/>'s<see cref="ITrigger"/> s missed one
+        ///             or more fire-times, then the <see cref="ITrigger"/>'s misfire
         ///             instruction will be applied.
         /// </para>
         /// </summary>
@@ -231,8 +231,8 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Pause the <see cref="T:Quartz.IJob"/> with the given key - by
-        ///             pausing all of its current <see cref="T:Quartz.ITrigger"/>s.
+        /// Pause the <see cref="IJob"/> with the given key - by
+        ///             pausing all of its current <see cref="ITrigger"/>s.
         /// </summary>
         public async Task PauseJobAsync(JobKey jobKey)
         {
@@ -242,73 +242,73 @@ namespace QuartzRedisJobStore.JobStore
 
 
         /// <summary>
-        /// Resume (un-pause) all of the <see cref="T:Quartz.IJob"/>s in
+        /// Resume (un-pause) all of the <see cref="IJob"/>s in
         ///             the given group.
         /// <para>
-        /// If any of the <see cref="T:Quartz.IJob"/> s had <see cref="T:Quartz.ITrigger"/> s that
-        ///             missed one or more fire-times, then the <see cref="T:Quartz.ITrigger"/>'s
+        /// If any of the <see cref="IJob"/> s had <see cref="ITrigger"/> s that
+        ///             missed one or more fire-times, then the <see cref="ITrigger"/>'s
         ///             misfire instruction will be applied.
         /// </para>
         /// </summary>
         public abstract Task<IReadOnlyCollection<string>> ResumeJobsAsync(GroupMatcher<JobKey> matcher);
 
         /// <summary>
-        /// Resume (un-pause) the <see cref="T:Quartz.ITrigger"/> with the
+        /// Resume (un-pause) the <see cref="ITrigger"/> with the
         ///             given key.
         /// <para>
-        /// If the <see cref="T:Quartz.ITrigger"/> missed one or more fire-times, then the
-        ///             <see cref="T:Quartz.ITrigger"/>'s misfire instruction will be applied.
+        /// If the <see cref="ITrigger"/> missed one or more fire-times, then the
+        ///             <see cref="ITrigger"/>'s misfire instruction will be applied.
         /// </para>
         /// </summary>
-        /// <seealso cref="T:System.String"/>
+        /// <seealso cref="string"/>
         public abstract Task ResumeTriggerAsync(TriggerKey triggerKey);
 
         /// <summary>
-        /// Remove (delete) the <see cref="T:Quartz.ITrigger"/> with the given key.
+        /// Remove (delete) the <see cref="ITrigger"/> with the given key.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// If removal of the <see cref="T:Quartz.ITrigger"/> results in an empty group, the
-        ///             group should be removed from the <see cref="T:Quartz.Spi.IJobStore"/>'s list of
+        /// If removal of the <see cref="ITrigger"/> results in an empty group, the
+        ///             group should be removed from the <see cref="IJobStore"/>'s list of
         ///             known group names.
         /// </para>
         /// <para>
-        /// If removal of the <see cref="T:Quartz.ITrigger"/> results in an 'orphaned' <see cref="T:Quartz.IJob"/>
-        ///             that is not 'durable', then the <see cref="T:Quartz.IJob"/> should be deleted
+        /// If removal of the <see cref="ITrigger"/> results in an 'orphaned' <see cref="IJob"/>
+        ///             that is not 'durable', then the <see cref="IJob"/> should be deleted
         ///             also.
         /// </para>
         /// </remarks>
         /// <returns>
-        /// <see langword="true"/> if a <see cref="T:Quartz.ITrigger"/> with the given
+        /// <see langword="true"/> if a <see cref="ITrigger"/> with the given
         ///             name and group was found and removed from the store.
         /// </returns>
         public abstract Task<bool> RemoveTriggerAsync(TriggerKey triggerKey, bool removeNonDurableJob = true);
 
         /// <summary>
-        /// Resume (un-pause) all of the <see cref="T:Quartz.ITrigger"/>s
+        /// Resume (un-pause) all of the <see cref="ITrigger"/>s
         ///             in the given group.
         /// <para>
-        /// If any <see cref="T:Quartz.ITrigger"/> missed one or more fire-times, then the
-        ///             <see cref="T:Quartz.ITrigger"/>'s misfire instruction will be applied.
+        /// If any <see cref="ITrigger"/> missed one or more fire-times, then the
+        ///             <see cref="ITrigger"/>'s misfire instruction will be applied.
         /// </para>
         /// </summary>
         public abstract Task<IReadOnlyCollection<string>> ResumeTriggersAsync(GroupMatcher<TriggerKey> matcher);
 
         /// <summary>
-        /// Pause the <see cref="T:Quartz.ITrigger"/> with the given key.
+        /// Pause the <see cref="ITrigger"/> with the given key.
         /// </summary>
         public abstract Task PauseTriggerAsync(TriggerKey triggerKey);
 
 
         /// <summary>
-        /// Pause all triggers - equivalent of calling <see cref="M:Quartz.Spi.IJobStore.PauseTriggers(Quartz.Impl.Matchers.GroupMatcher{Quartz.TriggerKey})"/>
+        /// Pause all triggers - equivalent of calling <see cref="IJobStore.PauseTriggers(GroupMatcher{TriggerKey})"/>
         ///             on every group.
         /// <para>
-        /// When <see cref="M:Quartz.Spi.IJobStore.ResumeAll"/> is called (to un-pause), trigger misfire
+        /// When <see cref="IJobStore.ResumeAll"/> is called (to un-pause), trigger misfire
         ///             instructions WILL be applied.
         /// </para>
         /// </summary>
-        /// <seealso cref="M:Quartz.Spi.IJobStore.ResumeAll"/>
+        /// <seealso cref="IJobStore.ResumeAll"/>
         public async Task PauseAllTriggersAsync()
         {
             var triggerGroups = await db.SetMembersAsync(redisJobStoreSchema.TriggerGroupsSetKey());
@@ -317,14 +317,14 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Resume (un-pause) all triggers - equivalent of calling <see cref="M:Quartz.Spi.IJobStore.ResumeTriggers(Quartz.Impl.Matchers.GroupMatcher{Quartz.TriggerKey})"/>
+        /// Resume (un-pause) all triggers - equivalent of calling <see cref="IJobStore.ResumeTriggers(GroupMatcher{TriggerKey})"/>
         ///             on every group.
         /// <para>
-        /// If any <see cref="T:Quartz.ITrigger"/> missed one or more fire-times, then the
-        ///             <see cref="T:Quartz.ITrigger"/>'s misfire instruction will be applied.
+        /// If any <see cref="ITrigger"/> missed one or more fire-times, then the
+        ///             <see cref="ITrigger"/>'s misfire instruction will be applied.
         /// </para>
         /// </summary>
-        /// <seealso cref="M:Quartz.Spi.IJobStore.PauseAll"/>
+        /// <seealso cref="IJobStore.PauseAll"/>
         public async Task ResumeAllTriggersAsync()
         {
             var triggerGroups = await db.SetMembersAsync(redisJobStoreSchema.TriggerGroupsSetKey());
@@ -354,15 +354,16 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Remove (delete) the <see cref="T:Quartz.ITrigger"/> with the
+        /// Remove (delete) the <see cref="ITrigger"/> with the
         ///             given name, and store the new given one - which must be associated
         ///             with the same job.
         /// </summary>
-        /// <param name="triggerKey">The <see cref="T:Quartz.ITrigger"/> to be replaced.</param><param name="newTrigger">The new <see cref="T:Quartz.ITrigger"/> to be stored.</param>
+        /// <param name="triggerKey">The <see cref="ITrigger"/> to be replaced.</param><param name="newTrigger">The new <see cref="ITrigger"/> to be stored.</param>
         /// <returns>
-        /// <see langword="true"/> if a <see cref="T:Quartz.ITrigger"/> with the given
+        /// <see langword="true"/> if a <see cref="ITrigger"/> with the given
         ///             name and group was found and removed from the store.
         /// </returns>
+        /// <exception cref="JobPersistenceException"></exception>
         public async Task<bool> ReplaceTriggerAsync(TriggerKey triggerKey, IOperableTrigger newTrigger)
         {
             var oldTrigger = await RetrieveTriggerAsync(triggerKey);
@@ -382,10 +383,10 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Retrieve the given <see cref="T:Quartz.ITrigger"/>.
+        /// Retrieve the given <see cref="ITrigger"/>.
         /// </summary>
         /// <returns>
-        /// The desired <see cref="T:Quartz.ITrigger"/>, or null if there is no
+        /// The desired <see cref="ITrigger"/>, or null if there is no
         ///             match.
         /// </returns>
         public async Task<IOperableTrigger> RetrieveTriggerAsync(TriggerKey triggerKey)
@@ -397,9 +398,8 @@ namespace QuartzRedisJobStore.JobStore
             if (properties != null && properties.Any())
                 return CreateTriggerFromProperties(triggerKey, ConvertToDictionaryString(properties));
 
-            logger.LogWarning("trigger does not exist - {0}", triggerHashKey);
-            return null;
-
+            Logger.LogWarning("trigger does not exist - {0}", triggerHashKey);
+            return null!;
         }
 
         /// <summary>
@@ -425,8 +425,7 @@ namespace QuartzRedisJobStore.JobStore
         /// <param name="noLaterThan">If &gt; 0, the JobStore should only return a Trigger
         ///             that will fire no later than the time represented in this value as
         ///             milliseconds.</param><param name="maxCount"/><param name="timeWindow"/>
-        /// <returns/>
-        /// <seealso cref="T:Quartz.ITrigger"/>
+        /// <seealso cref="ITrigger"/>
         public async Task<IReadOnlyCollection<IOperableTrigger>> AcquireNextTriggersAsync(DateTimeOffset noLaterThan, int maxCount, TimeSpan timeWindow)
         {
             await ReleaseTriggersAsync();
@@ -485,8 +484,8 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Inform the <see cref="T:Quartz.Spi.IJobStore"/> that the scheduler no longer plans to
-        ///             fire the given <see cref="T:Quartz.ITrigger"/>, that it had previously acquired
+        /// Inform the <see cref="IJobStore"/> that the scheduler no longer plans to
+        ///             fire the given <see cref="ITrigger"/>, that it had previously acquired
         ///             (reserved).
         /// </summary>
         public async Task ReleaseAcquiredTriggerAsync(IOperableTrigger trigger)
@@ -505,8 +504,8 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Inform the <see cref="T:Quartz.Spi.IJobStore"/> that the scheduler is now firing the
-        ///             given <see cref="T:Quartz.ITrigger"/> (executing its associated <see cref="T:Quartz.IJob"/>),
+        /// Inform the <see cref="IJobStore"/> that the scheduler is now firing the
+        ///             given <see cref="ITrigger"/> (executing its associated <see cref="IJob"/>),
         ///             that it had previously acquired (reserved).
         /// </summary>
         /// <returns>
@@ -518,20 +517,20 @@ namespace QuartzRedisJobStore.JobStore
         public abstract Task<IReadOnlyCollection<TriggerFiredResult>> TriggersFiredAsync(IReadOnlyCollection<IOperableTrigger> triggers);
 
         /// <summary>
-        /// Inform the <see cref="T:Quartz.Spi.IJobStore"/> that the scheduler has completed the
-        ///             firing of the given <see cref="T:Quartz.ITrigger"/> (and the execution its
-        ///             associated <see cref="T:Quartz.IJob"/>), and that the <see cref="T:Quartz.JobDataMap"/>
-        ///             in the given <see cref="T:Quartz.IJobDetail"/> should be updated if the <see cref="T:Quartz.IJob"/>
+        /// Inform the <see cref="IJobStore"/> that the scheduler has completed the
+        ///             firing of the given <see cref="ITrigger"/> (and the execution its
+        ///             associated <see cref="IJob"/>), and that the <see cref="JobDataMap"/>
+        ///             in the given <see cref="IJobDetail"/> should be updated if the <see cref="IJob"/>
         ///             is stateful.
         /// </summary>
         public abstract Task TriggeredJobCompleteAsync(IOperableTrigger trigger, IJobDetail jobDetail, SchedulerInstruction triggerInstCode);
 
         /// <summary>
-        /// Retrieve the given <see cref="T:Quartz.ITrigger"/>.
+        /// Retrieve the given <see cref="ITrigger"/>.
         /// </summary>
-        /// <param name="calName">The name of the <see cref="T:Quartz.ICalendar"/> to be retrieved.</param>
+        /// <param name="calName">The name of the <see cref="ICalendar"/> to be retrieved.</param>
         /// <returns>
-        /// The desired <see cref="T:Quartz.ICalendar"/>, or null if there is no
+        /// The desired <see cref="ICalendar"/>, or null if there is no
         ///             match.
         /// </returns>
         public async Task<ICalendar> RetrieveCalendarAsync(string calName)
@@ -589,55 +588,40 @@ namespace QuartzRedisJobStore.JobStore
         /// returns true if the given JobGroup is paused
         /// </summary>
         /// <param name="groupName"/>
-        /// <returns/>
-        public Task<bool> IsJobGroupPausedAsync(string groupName)
-        {
-            return db.SetContainsAsync(redisJobStoreSchema.PausedJobGroupsSetKey(), redisJobStoreSchema.JobGroupSetKey(groupName));
-        }
+        public Task<bool> IsJobGroupPausedAsync(string groupName) =>
+            db.SetContainsAsync(redisJobStoreSchema.PausedJobGroupsSetKey(), redisJobStoreSchema.JobGroupSetKey(groupName));
 
         /// <summary>
         /// returns true if the given TriggerGroup
         ///             is paused
         /// </summary>
         /// <param name="groupName"/>
-        /// <returns/>
-        public Task<bool> IsTriggerGroupPausedAsync(string groupName)
-        {
-            return db.SetContainsAsync(redisJobStoreSchema.PausedTriggerGroupsSetKey(), redisJobStoreSchema.TriggerGroupSetKey(groupName));
-        }
+        public Task<bool> IsTriggerGroupPausedAsync(string groupName) =>
+            db.SetContainsAsync(redisJobStoreSchema.PausedTriggerGroupsSetKey(), redisJobStoreSchema.TriggerGroupSetKey(groupName));
 
         /// <summary>
-        /// Get the number of <see cref="T:Quartz.IJob"/>s that are
-        ///             stored in the <see cref="T:Quartz.Spi.IJobStore"/>.
+        /// Get the number of <see cref="IJob"/>s that are
+        ///             stored in the <see cref="IJobStore"/>.
         /// </summary>
-        /// <returns/>
-        public async Task<int> NumberOfJobsAsync()
-        {
-            return (int)await db.SetLengthAsync(redisJobStoreSchema.JobsSetKey());
-        }
+        public async Task<int> NumberOfJobsAsync() =>
+            (int)await db.SetLengthAsync(redisJobStoreSchema.JobsSetKey());
 
         /// <summary>
-        /// Get the number of <see cref="T:Quartz.ITrigger"/>s that are
-        ///             stored in the <see cref="T:Quartz.Spi.IJobStore"/>.
+        /// Get the number of <see cref="ITrigger"/>s that are
+        ///             stored in the <see cref="IJobStore"/>.
         /// </summary>
-        /// <returns/>
-        public async Task<int> NumberOfTriggersAsync()
-        {
-            return (int)await db.SetLengthAsync(redisJobStoreSchema.TriggersSetKey());
-        }
+        public async Task<int> NumberOfTriggersAsync() =>
+            (int)await db.SetLengthAsync(redisJobStoreSchema.TriggersSetKey());
 
         /// <summary>
-        /// Get the number of <see cref="T:Quartz.ICalendar"/> s that are
-        ///             stored in the <see cref="T:Quartz.Spi.IJobStore"/>.
+        /// Get the number of <see cref="ICalendar"/> s that are
+        ///             stored in the <see cref="IJobStore"/>.
         /// </summary>
-        /// <returns/>
-        public async Task<int> NumberOfCalendarsAsync()
-        {
-            return (int)await db.SetLengthAsync(redisJobStoreSchema.CalendarsSetKey());
-        }
+        public async Task<int> NumberOfCalendarsAsync() =>
+            (int)await db.SetLengthAsync(redisJobStoreSchema.CalendarsSetKey());
 
         /// <summary>
-        /// Get the names of all of the <see cref="T:Quartz.IJob"/> s that
+        /// Get the names of all of the <see cref="IJob"/> s that
         ///             have the given group name.
         /// <para>
         /// If there are no jobs in the given group name, the result should be a
@@ -645,11 +629,10 @@ namespace QuartzRedisJobStore.JobStore
         /// </para>
         /// </summary>
         /// <param name="matcher"/>
-        /// <returns/>
         public abstract Task<IReadOnlyCollection<JobKey>> JobKeysAsync(GroupMatcher<JobKey> matcher);
 
         /// <summary>
-        /// Get the names of all of the <see cref="T:Quartz.ITrigger"/>s
+        /// Get the names of all of the <see cref="ITrigger"/>s
         ///             that have the given group name.
         /// <para>
         /// If there are no triggers in the given group name, the result should be a
@@ -659,7 +642,7 @@ namespace QuartzRedisJobStore.JobStore
         public abstract Task<IReadOnlyCollection<TriggerKey>> TriggerKeysAsync(GroupMatcher<TriggerKey> matcher);
 
         /// <summary>
-        /// Get the names of all of the <see cref="T:Quartz.IJob"/>
+        /// Get the names of all of the <see cref="IJob"/>
         ///             groups.
         /// <para>
         /// If there are no known group names, the result should be a zero-length
@@ -673,7 +656,7 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Get the names of all of the <see cref="T:Quartz.ITrigger"/>
+        /// Get the names of all of the <see cref="ITrigger"/>
         ///             groups.
         /// <para>
         /// If there are no known group names, the result should be a zero-length
@@ -687,8 +670,8 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Get the names of all of the <see cref="T:Quartz.ICalendar"/> s
-        ///             in the <see cref="T:Quartz.Spi.IJobStore"/>.
+        /// Get the names of all of the <see cref="ICalendar"/> s
+        ///             in the <see cref="IJobStore"/>.
         /// <para>
         /// If there are no Calendars in the given group name, the result should be
         ///             a zero-length array (not <see langword="null"/>).
@@ -701,13 +684,13 @@ namespace QuartzRedisJobStore.JobStore
         }
 
         /// <summary>
-        /// Get the current state of the identified <see cref="T:Quartz.ITrigger"/>.
+        /// Get the current state of the identified <see cref="ITrigger"/>.
         /// </summary>
-        /// <seealso cref="T:Quartz.TriggerState"/>
+        /// <seealso cref="TriggerState"/>
         public abstract Task<TriggerState> GetTriggerStateAsync(TriggerKey triggerKey);
 
         /// <summary>
-        /// Pause all of the <see cref="T:Quartz.ITrigger"/>s in the
+        /// Pause all of the <see cref="ITrigger"/>s in the
         ///             given group.
         /// </summary>
         /// <remarks>
@@ -729,7 +712,7 @@ namespace QuartzRedisJobStore.JobStore
             var score = misfireTime;
 
             if (misfireThreshold > 0)
-                misfireTime = misfireTime - misfireThreshold;
+                misfireTime -= misfireThreshold;
 
             //if the trigger has no next fire time or exceeds the misfirethreshold or enable ignore misfirepolicy
             // then dont apply misfire.
@@ -767,10 +750,8 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="jobKey">Jobkey</param>
         /// <returns>exists or not</returns>
-        public Task<bool> CheckExistsAsync(JobKey jobKey)
-        {
-            return db.KeyExistsAsync(redisJobStoreSchema.JobHashKey(jobKey));
-        }
+        public Task<bool> CheckExistsAsync(JobKey jobKey) =>
+            db.KeyExistsAsync(redisJobStoreSchema.JobHashKey(jobKey));
 
 
         /// <summary>
@@ -778,10 +759,8 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="calName">Calendar Name</param>
         /// <returns>exists or not</returns>
-        public Task<bool> CheckExistsAsync(string calName)
-        {
-            return db.KeyExistsAsync(redisJobStoreSchema.CalendarHashKey(calName));
-        }
+        public Task<bool> CheckExistsAsync(string calName) =>
+            db.KeyExistsAsync(redisJobStoreSchema.CalendarHashKey(calName));
 
 
         /// <summary>
@@ -789,10 +768,8 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="triggerKey">TriggerKey</param>
         /// <returns>exists or not</returns>
-        public Task<bool> CheckExistsAsync(TriggerKey triggerKey)
-        {
-            return db.KeyExistsAsync(redisJobStoreSchema.TriggerHashkey(triggerKey));
-        }
+        public Task<bool> CheckExistsAsync(TriggerKey triggerKey) =>
+            db.KeyExistsAsync(redisJobStoreSchema.TriggerHashkey(triggerKey));
 
         /// <summary>
         /// delete all scheduling data - all jobs, triggers and calendars. Scheduler.Clear()
@@ -838,10 +815,8 @@ namespace QuartzRedisJobStore.JobStore
         /// Set the last time at which orphaned triggers were released
         /// </summary>
         /// <param name="time">time in milli seconds from epoch time</param>
-        protected Task SetLastTriggerReleaseTimeAsync(double time)
-        {
-            return db.StringSetAsync(redisJobStoreSchema.LastTriggerReleaseTime(), time);
-        }
+        protected Task SetLastTriggerReleaseTimeAsync(double time) =>
+            db.StringSetAsync(redisJobStoreSchema.LastTriggerReleaseTime(), time);
 
         /// <summary>
         /// Set a trigger state by adding the trigger to the relevant sorted set, using its next fire time as the score.
@@ -879,10 +854,8 @@ namespace QuartzRedisJobStore.JobStore
         {
             var stringMap = new Dictionary<string, string>();
             if (entries != null)
-            {
                 foreach (var entry in entries)
                     stringMap.Add(entry.Name, entry.Value.ToString());
-            }
             return stringMap;
         }
 
@@ -912,6 +885,7 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="trigger">Trigger</param>
         /// <returns>Array of <see cref="HashEntry"/></returns>
+        /// <exception cref="InvalidCastException"></exception>
         protected HashEntry[] ConvertToHashEntries(ITrigger trigger)
         {
             var operableTrigger = trigger as IOperableTrigger;
@@ -922,12 +896,12 @@ namespace QuartzRedisJobStore.JobStore
                 {
                     new HashEntry(RedisJobStoreSchema.JobHash, redisJobStoreSchema.JobHashKey(operableTrigger.JobKey)),
                     new HashEntry(RedisJobStoreSchema.Description, operableTrigger.Description ?? ""),
-                    new HashEntry(RedisJobStoreSchema.NextFireTime, operableTrigger.GetNextFireTimeUtc().HasValue? operableTrigger.GetNextFireTimeUtc().Value.DateTime.ToUnixTimeMilliSeconds().ToString():""),
-                    new HashEntry(RedisJobStoreSchema.PrevFireTime, operableTrigger.GetPreviousFireTimeUtc().HasValue? operableTrigger.GetPreviousFireTimeUtc().Value.DateTime.ToUnixTimeMilliSeconds().ToString():""),
+                    new HashEntry(RedisJobStoreSchema.NextFireTime, operableTrigger.GetNextFireTimeUtc()?.DateTime.ToUnixTimeMilliSeconds().ToString() ?? ""),
+                    new HashEntry(RedisJobStoreSchema.PrevFireTime, operableTrigger.GetPreviousFireTimeUtc()?.DateTime.ToUnixTimeMilliSeconds().ToString() ?? ""),
                     new HashEntry(RedisJobStoreSchema.Priority, operableTrigger.Priority),
                     new HashEntry(RedisJobStoreSchema.StartTime, operableTrigger.StartTimeUtc.DateTime.ToUnixTimeMilliSeconds().ToString()),
-                    new HashEntry(RedisJobStoreSchema.EndTime, operableTrigger.EndTimeUtc.HasValue?operableTrigger.EndTimeUtc.Value.DateTime.ToUnixTimeMilliSeconds().ToString():""),
-                    new HashEntry(RedisJobStoreSchema.FinalFireTime, operableTrigger.FinalFireTimeUtc.HasValue?operableTrigger.FinalFireTimeUtc.Value.DateTime.ToUnixTimeMilliSeconds().ToString():""),
+                    new HashEntry(RedisJobStoreSchema.EndTime, operableTrigger.EndTimeUtc?.DateTime.ToUnixTimeMilliSeconds().ToString() ?? ""),
+                    new HashEntry(RedisJobStoreSchema.FinalFireTime, operableTrigger.FinalFireTimeUtc?.DateTime.ToUnixTimeMilliSeconds().ToString()  ?? ""),
                     new HashEntry(RedisJobStoreSchema.FireInstanceId, operableTrigger.FireInstanceId ?? string.Empty),
                     new HashEntry(RedisJobStoreSchema.MisfireInstruction, operableTrigger.MisfireInstruction),
                     new HashEntry(RedisJobStoreSchema.CalendarName, operableTrigger.CalendarName ?? string.Empty)
@@ -954,26 +928,18 @@ namespace QuartzRedisJobStore.JobStore
         /// convert Calendar to HashEntry array
         /// </summary>
         /// <param name="calendar"></param>
-        /// <returns></returns>
-        protected HashEntry[] ConvertToHashEntries(ICalendar calendar)
-        {
-            var entries = new List<HashEntry>
+        protected HashEntry[] ConvertToHashEntries(ICalendar calendar) => new List<HashEntry>
                 {
                     new HashEntry(RedisJobStoreSchema.CalendarSerialized, JsonConvert.SerializeObject(calendar, serializerSettings))
-                };
-
-            return entries.ToArray();
-        }
+                }.ToArray();
 
         /// <summary>
         /// Lock the trigger with the given key to the current job scheduler
         /// </summary>
         /// <param name="triggerKey">TriggerKey</param>
         /// <returns>succeed or not</returns>
-        protected Task<bool> LockTriggerAsync(TriggerKey triggerKey)
-        {
-            return db.StringSetAsync(redisJobStoreSchema.TriggerLockKey(triggerKey), schedulerInstanceId, TimeSpan.FromSeconds(triggerLockTimeout));
-        }
+        protected Task<bool> LockTriggerAsync(TriggerKey triggerKey) =>
+            db.StringSetAsync(redisJobStoreSchema.TriggerLockKey(triggerKey), schedulerInstanceId, TimeSpan.FromSeconds(triggerLockTimeout));
 
         #region private methods
 
@@ -1029,7 +995,7 @@ namespace QuartzRedisJobStore.JobStore
         /// <param name="triggerKey">triggerKey</param>
         /// <param name="properties">trigger's properties</param>
         /// <param name="trigger">IOperableTrigger</param>
-        void PopulateTrigger(TriggerKey triggerKey, IDictionary<string, string> properties, IOperableTrigger trigger)
+        private void PopulateTrigger(TriggerKey triggerKey, IDictionary<string, string> properties, IOperableTrigger trigger)
         {
             trigger.Key = triggerKey;
             var (name, group) = redisJobStoreSchema.Split(properties[RedisJobStoreSchema.JobHash]);
@@ -1066,10 +1032,7 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="millis">milliseconds</param>
         /// <returns>datetime in utc</returns>
-        static DateTime DateTimeFromUnixTimestampMillis(double millis)
-        {
-            return unixEpoch.AddMilliseconds(millis);
-        }
+        private static DateTime DateTimeFromUnixTimestampMillis(double millis) => unixEpoch.AddMilliseconds(millis);
 
         /// <summary>
         /// get the total milli seconds from unix epoch time.
@@ -1087,7 +1050,9 @@ namespace QuartzRedisJobStore.JobStore
         /// try to acquire a redis lock.
         /// </summary>
         /// <returns>locked or not</returns>
-        async Task<(bool locked, string lockValue)> TryLockAsync(CancellationToken cancellationToken)
+        /// <exception cref="OperationCanceledException"></exception>
+        /// <exception cref="ObjectDisposedException"></exception>
+        private async Task<(bool locked, string? lockValue)> TryLockAsync(CancellationToken cancellationToken)
         {
             var guid = Guid.NewGuid().ToString();
             var lockacquired = await db.LockTakeAsync(redisJobStoreSchema.LockKey, guid, TimeSpan.FromMilliseconds(redisLockTimeout));
@@ -1099,19 +1064,20 @@ namespace QuartzRedisJobStore.JobStore
         /// try to acquire a lock with retry
         /// if acquire fails, then retry till it succeeds.
         /// </summary>
-        public async Task<string> LockWithWait(CancellationToken cancellationToken)
+        /// <returns> null when not lock </returns>
+        public async Task<string?> LockWithWait(CancellationToken cancellationToken)
         {
-            (bool locked, string lockValue) tuple;
+            (bool locked, string? lockValue) tuple;
             while (!(tuple = await TryLockAsync(cancellationToken)).locked)
             {
                 try
                 {
-                    logger.LogInformation("waiting for redis lock");
+                    Logger.LogInformation("waiting for redis lock");
                     await Task.Delay(RandomInt(75, 125));
                 }
                 catch (ThreadInterruptedException ex)
                 {
-                    logger.LogError(ex, "errored out on waiting for a lock");
+                    Logger.LogError(ex, "errored out on waiting for a lock");
                 }
             }
             return tuple.lockValue;
@@ -1123,27 +1089,18 @@ namespace QuartzRedisJobStore.JobStore
         /// <param name="min">mininum number</param>
         /// <param name="max">maxinum number></param>
         /// <returns>random number</returns>
-        protected int RandomInt(int min, int max)
-        {
-            return new Random().Next((max - min) + 1) + min;
-        }
+        protected int RandomInt(int min, int max) => new Random().Next((max - min) + 1) + min;
 
         /// <summary>
         /// release the redis lock. 
         /// </summary>
         /// <returns>unlock succeeds or not</returns>
-        public Task<bool> UnlockAsync(string lockValue)
-        {
-            return db.LockReleaseAsync(redisJobStoreSchema.LockKey, lockValue);
-        }
+        public Task<bool> UnlockAsync(string lockValue) => db.LockReleaseAsync(redisJobStoreSchema.LockKey, lockValue);
 
         /// <summary>
         /// return the logger for the current class
         /// </summary>
-        protected ILogger Logger
-        {
-            get { return logger; }
-        }
+        protected ILogger Logger { get; }
         #endregion
     }
 }

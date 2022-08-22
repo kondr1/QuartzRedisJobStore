@@ -1,54 +1,39 @@
-﻿using Quartz;
+using Quartz;
 using System;
 using System.Collections.Generic;
 
 namespace QuartzRedisJobStore.JobStore
 {
     /// <summary>
-    /// schema class for creating keys for hash, set etc. 
+    /// schema class for creating keys for hash, set etc.
     /// </summary>
     public class RedisJobStoreSchema
     {
-        /// <summary>
-        /// Default lock name
-        /// </summary>
-        const string DefaultLockName = "lock";
+        /// <summary> Default lock name </summary>
+        private const string DefaultLockName = "lock";
 
         #region Job related key names
-        /// <summary>
-        /// Job Class Name
-        /// </summary>
+        /// <summary> Job Class Name </summary>
         public const string JobClass = "job_class_name";
-        /// <summary>
-        /// Description
-        /// </summary>
+        /// <summary> Description </summary>
         public const string Description = "description";
-        /// <summary>
-        /// Is Durable
-        /// </summary>
+        /// <summary> Is Durable </summary>
         public const string IsDurable = "is_durable";
 
-        /// <summary>
-        /// Request Recovery
-        /// </summary>
+        /// <summary> Request Recovery </summary>
         public const string RequestRecovery = "request_recovery";
-        /// <summary>
-        /// Blocked By
-        /// </summary>
+        /// <summary> Blocked By </summary>
         public const string BlockedBy = "blocked_by";
-        /// <summary>
-        /// block time
-        /// </summary>
+        /// <summary> block time </summary>
         public const string BlockTime = "block_time";
 
-        /// <summary>
-        /// set name for jobs
-        /// </summary>
-        const string JobsSet = "jobs";
+        /// <summary> set name for jobs </summary>
+        private const string JobsSet = "jobs";
+
         /// <summary>
         /// set name for all the groups who have jobs.
         /// </summary>
-        const string JobGroupsSet = "job_groups";
+        private const string JobGroupsSet = "job_groups";
         #endregion
 
         #region trigger related key names
@@ -145,36 +130,30 @@ namespace QuartzRedisJobStore.JobStore
         /// <summary>
         /// Default Delimiter
         /// </summary>
-        const string DefaultDelimiter = ":";
+        private const string DefaultDelimiter = ":";
 
         /// <summary>
         /// name for prefix used to support different schedulers 
         /// </summary>
-        readonly string prefix;
+        private readonly string prefix;
+
         /// <summary>
         /// delimiter 
         /// </summary>
-        readonly string delimiter;
-
-        readonly string escapedDelimiter;
+        private readonly string delimiter;
+        private readonly string escapedDelimiter;
 
 
         /// <summary>
         /// constructor, with no prefix
         /// </summary>
-        public RedisJobStoreSchema() : this(string.Empty)
-        {
-
-        }
+        public RedisJobStoreSchema() : this(string.Empty) { }
 
         /// <summary>
         /// constructor with the customized prefix
         /// </summary>
         /// <param name="prefix">prefix</param>
-        public RedisJobStoreSchema(string prefix) : this(prefix, DefaultDelimiter)
-        {
-
-        }
+        public RedisJobStoreSchema(string prefix) : this(prefix, DefaultDelimiter) { }
 
         /// <summary>
         /// constructor
@@ -195,30 +174,21 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="jobKey">Job Key</param>
         /// <returns>hash key</returns>
-        public string JobHashKey(JobKey jobKey)
-        {
-            return AddPrefix("job", jobKey.Group, jobKey.Name);
-        }
+        public string JobHashKey(JobKey jobKey) => AddPrefix("job", jobKey.Group, jobKey.Name);
 
         /// <summary>
         /// construct a hash Key for jobdatamap
         /// </summary>
         /// <param name="jobKey">Job Key</param>
         /// <returns>hash key</returns>
-        public string JobDataMapHashKey(JobKey jobKey)
-        {
-            return AddPrefix("job_data_map", jobKey.Group, jobKey.Name);
-        }
+        public string JobDataMapHashKey(JobKey jobKey) => AddPrefix("job_data_map", jobKey.Group, jobKey.Name);
 
         /// <summary>
         /// construct a set key for a particular group as a jobgroup could have many names.
         /// </summary>
         /// <param name="groupName">Group Name</param>
         /// <returns>key for the set</returns>
-        public string JobGroupSetKey(string groupName)
-        {
-            return AddPrefix("job_group", groupName);
-        }
+        public string JobGroupSetKey(string groupName) => AddPrefix("job_group", groupName);
 
 
 
@@ -226,19 +196,13 @@ namespace QuartzRedisJobStore.JobStore
         /// set key for holding all the jobs.
         /// </summary>
         /// <returns>set key</returns>
-        public string JobsSetKey()
-        {
-            return AddPrefix(JobsSet);
-        }
+        public string JobsSetKey() => AddPrefix(JobsSet);
 
         /// <summary>
         /// set kye for holding all the job groups
         /// </summary>
         /// <returns>set key</returns>
-        public string JobGroupsSetKey()
-        {
-            return AddPrefix(JobGroupsSet);
-        }
+        public string JobGroupsSetKey() => AddPrefix(JobGroupsSet);
 
         /// <summary>
         /// construct a jobkey based on jobhashkey
@@ -255,86 +219,59 @@ namespace QuartzRedisJobStore.JobStore
         /// set key for blocked jobs. when the trigger fires, the job of it will be saved into this set, then when trigger completes, the job will be removed from it. 
         /// </summary>
         /// <returns>set key</returns>
-        public string BlockedJobsSet()
-        {
-            return AddPrefix("blocked_jobs");
-        }
+        public string BlockedJobsSet() => AddPrefix("blocked_jobs");
 
         /// <summary>
         /// a set key for holding up the triggers for a special job.
         /// </summary>
         /// <param name="jobKey">JobKey</param>
         /// <returns>set key</returns>
-        public string JobTriggersSetKey(JobKey jobKey)
-        {
-            return AddPrefix("job_triggers", jobKey.Group, jobKey.Name);
-        }
+        public string JobTriggersSetKey(JobKey jobKey) => AddPrefix("job_triggers", jobKey.Group, jobKey.Name);
 
         /// <summary>
         /// construct a hash key for a trigger
         /// </summary>
         /// <param name="triggerKey">TriggerKey</param>
         /// <returns>hash key</returns>
-        public string TriggerHashkey(TriggerKey triggerKey)
-        {
-            return AddPrefix("trigger", triggerKey.Group, triggerKey.Name);
-        }
+        public string TriggerHashkey(TriggerKey triggerKey) => AddPrefix("trigger", triggerKey.Group, triggerKey.Name);
 
         /// <summary>
         /// get the trigger group name based on triggerGroup Set key
         /// </summary>
         /// <param name="triggerGroupSetKey">triggerGroupSetKey</param>
         /// <returns>Trigger group name</returns>
-        public string TriggerGroup(string triggerGroupSetKey)
-        {
-            return Split(triggerGroupSetKey).group;
-        }
+        public string TriggerGroup(string triggerGroupSetKey) => Split(triggerGroupSetKey).group;
 
         /// <summary>
         /// construct a set key for trigger group, a group could have many triggers, a trigger belongs to a group.
         /// </summary>
         /// <param name="group">Group</param>
         /// <returns>set key</returns>
-        public string TriggerGroupSetKey(string group)
-        {
-            return AddPrefix("trigger_group", group);
-        }
+        public string TriggerGroupSetKey(string group) => AddPrefix("trigger_group", group);
 
         /// <summary>
         /// a set key which holds all the triggers.
         /// </summary>
         /// <returns>set key</returns>
-        public string TriggersSetKey()
-        {
-            return AddPrefix("triggers");
-        }
+        public string TriggersSetKey() => AddPrefix("triggers");
 
         /// <summary>
         /// a set key which holds all the trigger_groups
         /// </summary>
         /// <returns>set key</returns>
-        public string TriggerGroupsSetKey()
-        {
-            return AddPrefix("trigger_groups");
-        }
+        public string TriggerGroupsSetKey() => AddPrefix("trigger_groups");
 
         /// <summary>
         /// a set key which holds all the trigger groups whose state are paused.
         /// </summary>
         /// <returns>set key</returns>
-        public string PausedTriggerGroupsSetKey()
-        {
-            return AddPrefix("paused_trigger_groups");
-        }
+        public string PausedTriggerGroupsSetKey() => AddPrefix("paused_trigger_groups");
 
         /// <summary>
         /// a set key which holds all the job groups whose state are paused.
         /// </summary>
         /// <returns>set key</returns>
-        public string PausedJobGroupsSetKey()
-        {
-            return AddPrefix("paused_job_groups");
-        }
+        public string PausedJobGroupsSetKey() => AddPrefix("paused_job_groups");
 
         /// <summary>
         /// construct a triggerkey based the trigger's hashkey
@@ -352,40 +289,28 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="triggerState">RedisTriggerState</param>
         /// <returns>sorted set key</returns>
-        public string TriggerStateSetKey(RedisTriggerState triggerState)
-        {
-            return AddPrefix(triggerState.GetDisplayName());
-        }
+        public string TriggerStateSetKey(RedisTriggerState triggerState) => AddPrefix(triggerState.GetDisplayName());
 
         /// <summary>
         /// lock key for the trigger
         /// </summary>
         /// <param name="triggerKey">TriggerKey</param>
         /// <returns>a key</returns>
-        public string TriggerLockKey(TriggerKey triggerKey)
-        {
-            return AddPrefix("trigger_lock", triggerKey.Group, triggerKey.Name);
-        }
+        public string TriggerLockKey(TriggerKey triggerKey) => AddPrefix("trigger_lock", triggerKey.Group, triggerKey.Name);
 
         /// <summary>
         /// lock key for the job
         /// </summary>
         /// <param name="jobKey">JobKey</param>
         /// <returns>a key</returns>
-        public string JobBlockedKey(JobKey jobKey)
-        {
-            return AddPrefix("job_blocked", jobKey.Group, jobKey.Name);
-        }
+        public string JobBlockedKey(JobKey jobKey) => AddPrefix("job_blocked", jobKey.Group, jobKey.Name);
 
         /// <summary>
         /// construct a set key for a special calendar, who could have many triggers.
         /// </summary>
         /// <param name="calendarName">Calendar Name</param>
         /// <returns>set key</returns>
-        public string CalendarTriggersSetKey(string calendarName)
-        {
-            return AddPrefix("calendar_triggers", calendarName);
-        }
+        public string CalendarTriggersSetKey(string calendarName) => AddPrefix("calendar_triggers", calendarName);
 
 
         /// <summary>
@@ -393,48 +318,31 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="calendarName">CalendarName</param>
         /// <returns>hash key</returns>
-        public string CalendarHashKey(string calendarName)
-        {
-            return AddPrefix("calendar", calendarName);
-        }
+        public string CalendarHashKey(string calendarName) => AddPrefix("calendar", calendarName);
 
         /// <summary>
         /// get the calendarName based on the its hash key
         /// </summary>
         /// <param name="calendarHashKey">Calendar Hash Key</param>
         /// <returns>Calendar Name</returns>
-        public string GetCalendarName(string calendarHashKey)
-        {
-            return Split(calendarHashKey).group;
-        }
+        public string GetCalendarName(string calendarHashKey) => Split(calendarHashKey).group;
 
         /// <summary>
         /// a set key which contains all the calendar hash keys.
         /// </summary>
-        /// <returns></returns>
-        public string CalendarsSetKey()
-        {
-            return AddPrefix("calendars");
-        }
+        public string CalendarsSetKey() => AddPrefix("calendars");
 
         /// <summary>
         /// Get the job group base the jobgroupset key
         /// </summary>
         /// <param name="jobGroupSetKey">jobGroupSetKey</param>
         /// <returns>Job's Group</returns>
-        public string JobGroup(string jobGroupSetKey)
-        {
-            return Split(jobGroupSetKey).group;
-        }
+        public string JobGroup(string jobGroupSetKey) => Split(jobGroupSetKey).group;
 
         /// <summary>
         /// construct a key for LastTriggerReleaseTime which is used to check for releaseing the orphaned triggers.
         /// </summary>
-        /// <returns></returns>
-        public string LastTriggerReleaseTime()
-        {
-            return AddPrefix("last_triggers_release_time");
-        }
+        public string LastTriggerReleaseTime() => AddPrefix("last_triggers_release_time");
 
 
         /// <summary>
@@ -447,19 +355,19 @@ namespace QuartzRedisJobStore.JobStore
         /// </summary>
         /// <param name="key">key</param>
         /// <returns>key in redis</returns>
-        private string AddPrefix(string key, string group = null, string name = null)
+        private string AddPrefix(string key, string? group = null, string? name = null)
         {
-            return prefix + string.Join(delimiter, GetValues());
+            return prefix + string.Join(delimiter, getValues());
 
-            IEnumerable<string> GetValues()
+            IEnumerable<string> getValues()
             {
                 yield return key.Replace(delimiter, escapedDelimiter);
 
                 if (!string.IsNullOrEmpty(group))
-                    yield return group.Replace(delimiter, escapedDelimiter);
+                    yield return group!.Replace(delimiter, escapedDelimiter);
 
                 if (!string.IsNullOrEmpty(name))
-                    yield return name.Replace(delimiter, escapedDelimiter);
+                    yield return name!.Replace(delimiter, escapedDelimiter);
             }
         }
 
@@ -467,8 +375,8 @@ namespace QuartzRedisJobStore.JobStore
         /// split the string into a list based on the delimiter.
         /// </summary>
         /// <param name="val"></param>
-        /// <returns></returns>
-        internal (string name, string group) Split(string val)
+        /// <exception cref="ArgumentException"></exception>
+        internal (string? name, string group) Split(string val)
         {
             if (!val.StartsWith(prefix))
                 throw new ArgumentException($"Invalid key {val}, does not start with prefix {prefix}");
